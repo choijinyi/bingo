@@ -264,6 +264,12 @@ textarea {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
+.name-btn.selected {
+  background: var(--pastel-green-dark);
+  border-color: var(--pastel-green-dark);
+  color: var(--neon);
+}
+
 .name-btn.called {
   background: var(--called-red);
   border-color: var(--called-red-dark);

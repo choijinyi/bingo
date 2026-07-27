@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { supabase } from "../lib/supabase";
-import { makeGameCode, normalizeName, parseBulkNames } from "../lib/bingo";
+import { makeGameCode, normalizeName } from "../lib/bingo";
 
 const STORAGE_KEY = "name-bingo-host-code";
 
@@ -14,15 +14,13 @@ export default function HostPage() {
 
   // 게임 만들기 폼 상태
   const [title, setTitle] = useState("");
-  const [names, setNames] = useState(Array(25).fill(""));
-  const [bulk, setBulk] = useState("");
   const [creating, setCreating] = useState(false);
 
   // 진행 화면 상태
   const [qrUrl, setQrUrl] = useState("");
-  const [playerCount, setPlayerCount] = useState(0);
+  const [players, setPlayers] = useState([]);
+  const [selected, setSelected] = useState([]);
   const [copied, setCopied] = useState(false);
-  const pollRef = useRef(null);
 
   const loadGame = useCallback(async (code) => {
     const { data } = await supabase
@@ -58,64 +56,63 @@ export default function HostPage() {
     QRCode.toDataURL(playUrl, { width: 520, margin: 2 }).then(setQrUrl);
   }, [playUrl]);
 
-  // 참가자 수 폴링
+  // 참가자 이름 실시간 수신 (3초 폴링)
   useEffect(() => {
     if (!game) return undefined;
-    const fetchCount = async () => {
-      const { count } = await supabase
+    const fetchPlayers = async () => {
+      const { data } = await supabase
         .from("bingo_players")
-        .select("id", { count: "exact", head: true })
-        .eq("game_code", game.code);
-      if (typeof count === "number") setPlayerCount(count);
+        .select("id,nickname,created_at")
+        .eq("game_code", game.code)
+        .order("created_at", { ascending: true })
+        .limit(1000);
+      if (data) setPlayers(data);
     };
-    fetchCount();
-    pollRef.current = setInterval(fetchCount, 5000);
-    return () => clearInterval(pollRef.current);
+    fetchPlayers();
+    const t = setInterval(fetchPlayers, 3000);
+    return () => clearInterval(t);
   }, [game]);
 
-  const applyBulk = (text) => {
-    setBulk(text);
-    const parsed = parseBulkNames(text);
-    setNames((prev) => {
-      const next = Array(25).fill("");
-      for (let i = 0; i < 25; i += 1) next[i] = parsed[i] ?? "";
-      return parsed.length > 0 ? next : prev;
+  // 같은 이름은 하나로 합쳐 선택 후보로 보여준다
+  const pool = useMemo(() => {
+    const seen = new Map();
+    for (const p of players) {
+      const key = normalizeName(p.nickname);
+      if (key && !seen.has(key)) seen.set(key, p.nickname.trim());
+    }
+    return [...seen.values()];
+  }, [players]);
+
+  const selectedKeys = useMemo(() => new Set(selected.map(normalizeName)), [selected]);
+
+  const toggleSelect = (name) => {
+    setError("");
+    const key = normalizeName(name);
+    setSelected((prev) => {
+      if (prev.some((n) => normalizeName(n) === key)) {
+        return prev.filter((n) => normalizeName(n) !== key);
+      }
+      if (prev.length >= 25) return prev;
+      return [...prev, name];
     });
   };
 
-  const setNameAt = (idx, value) => {
-    setNames((prev) => {
-      const next = [...prev];
-      next[idx] = value;
-      return next;
-    });
+  const autoSelect = () => {
+    setError("");
+    setSelected(pool.slice(0, 25));
   };
-
-  const filledCount = names.filter((n) => n.trim()).length;
 
   const createGame = async () => {
     setError("");
-    const trimmed = names.map((n) => n.trim());
     if (!title.trim()) {
       setError("게임 이름을 입력해 주세요.");
-      return;
-    }
-    if (trimmed.some((n) => !n)) {
-      setError(`이름 25개를 모두 채워 주세요. (현재 ${filledCount}/25)`);
-      return;
-    }
-    const dupes = trimmed.filter(
-      (n, i) => trimmed.findIndex((m) => normalizeName(m) === normalizeName(n)) !== i
-    );
-    if (dupes.length > 0) {
-      setError(`중복된 이름이 있습니다: ${[...new Set(dupes)].join(", ")}`);
       return;
     }
     setCreating(true);
     const code = makeGameCode();
     const { data, error: err } = await supabase
       .from("bingo_games")
-      .insert({ code, title: title.trim(), names: trimmed, called: [], mode: "name" })
+      .insert({ code, title: title.trim(), names: [], called: [], mode: "name" })
       .select("code,title,names,called")
       .single();
     setCreating(false);
@@ -125,6 +122,30 @@ export default function HostPage() {
     }
     localStorage.setItem(STORAGE_KEY, data.code);
     setGame(data);
+  };
+
+  const confirmNames = async () => {
+    if (!game || selected.length !== 25) return;
+    const { error: err } = await supabase
+      .from("bingo_games")
+      .update({ names: selected, updated_at: new Date().toISOString() })
+      .eq("code", game.code);
+    if (err) {
+      setError("이름을 저장하지 못했습니다. 다시 시도해 주세요.");
+      return;
+    }
+    setGame({ ...game, names: selected });
+  };
+
+  const backToSelect = async () => {
+    if (!game) return;
+    if (!window.confirm("이름을 다시 선택할까요? 호출 기록도 초기화됩니다.")) return;
+    await supabase
+      .from("bingo_games")
+      .update({ names: [], called: [], updated_at: new Date().toISOString() })
+      .eq("code", game.code);
+    setSelected(game.names ?? []);
+    setGame({ ...game, names: [], called: [] });
   };
 
   const toggleCalled = async (name) => {
@@ -161,8 +182,8 @@ export default function HostPage() {
     setGame(null);
     setQrUrl("");
     setTitle("");
-    setNames(Array(25).fill(""));
-    setBulk("");
+    setPlayers([]);
+    setSelected([]);
   };
 
   const copyLink = async () => {
@@ -183,8 +204,8 @@ export default function HostPage() {
     );
   }
 
-  // ── 진행 화면 ──────────────────────────────────────
-  if (game) {
+  // ── 게임 진행 화면 (25명 확정 후: 이름 호출) ────────────
+  if (game && (game.names ?? []).length === 25) {
     const calledKeys = new Set((game.called ?? []).map(normalizeName));
     const orderOf = (name) =>
       (game.called ?? []).findIndex((c) => normalizeName(c) === normalizeName(name)) + 1;
@@ -192,21 +213,7 @@ export default function HostPage() {
     return (
       <main className="page">
         <h1 className="game-title">{game.title}</h1>
-        <p className="subtitle">진행자 화면 · 참가자 {playerCount}명 접속</p>
-
-        <section className="card">
-          <h2>📱 참가자 입장 QR</h2>
-          <div className="qr-box">
-            {qrUrl && <img src={qrUrl} alt="참가자 입장 QR 코드" />}
-            <span className="code-pill">{game.code}</span>
-            <div className="link-line">
-              <input className="text-input" readOnly value={playUrl} onFocus={(e) => e.target.select()} />
-              <button className="btn btn-secondary" onClick={copyLink}>
-                {copied ? "복사됨!" : "복사"}
-              </button>
-            </div>
-          </div>
-        </section>
+        <p className="subtitle">진행자 화면 · 참가자 {players.length}명 접속</p>
 
         <section className="card">
           <h2>
@@ -234,6 +241,9 @@ export default function HostPage() {
           <button className="btn btn-danger" onClick={resetCalled}>
             호출 초기화
           </button>
+          <button className="btn btn-secondary" onClick={backToSelect}>
+            이름 다시 선택
+          </button>
           <button className="btn btn-secondary" onClick={startNewGame}>
             새 게임 만들기
           </button>
@@ -242,14 +252,95 @@ export default function HostPage() {
     );
   }
 
-  // ── 게임 만들기 화면 ────────────────────────────────
+  // ── 참가자 모집 + 25명 선택 화면 ────────────────────────
+  if (game) {
+    return (
+      <main className="page">
+        <h1 className="game-title">{game.title}</h1>
+        <p className="subtitle">진행자 화면 · 참가자를 모으고 게임에 쓸 25명을 선택하세요</p>
+
+        <section className="card">
+          <h2>📱 참가자 입장 QR</h2>
+          <div className="qr-box">
+            {qrUrl && <img src={qrUrl} alt="참가자 입장 QR 코드" />}
+            <span className="code-pill">{game.code}</span>
+            <div className="link-line">
+              <input className="text-input" readOnly value={playUrl} onFocus={(e) => e.target.select()} />
+              <button className="btn btn-secondary" onClick={copyLink}>
+                {copied ? "복사됨!" : "복사"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="card">
+          <h2>
+            🙋 참가자 이름 ({pool.length}명 참가 · {selected.length}/25 선택) — 이름을 탭해서
+            선택하세요
+          </h2>
+          {pool.length === 0 ? (
+            <p className="hint">
+              아직 참가자가 없습니다. 참가자가 QR로 입장해 빙고판을 제출하면 이름이 여기에
+              실시간으로 나타납니다.
+            </p>
+          ) : (
+            <div className="host-grid">
+              {pool.map((name) => {
+                const isSelected = selectedKeys.has(normalizeName(name));
+                return (
+                  <button
+                    key={name}
+                    className={`name-btn${isSelected ? " selected" : ""}`}
+                    onClick={() => toggleSelect(name)}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="row" style={{ marginTop: 12 }}>
+            <button className="btn btn-secondary" onClick={autoSelect} disabled={pool.length === 0}>
+              먼저 온 25명 자동 선택
+            </button>
+            <button
+              className="btn btn-danger"
+              onClick={() => setSelected([])}
+              disabled={selected.length === 0}
+            >
+              선택 초기화
+            </button>
+          </div>
+          {error && <p className="error-text">{error}</p>}
+        </section>
+
+        <button
+          className="btn btn-primary"
+          onClick={confirmNames}
+          disabled={selected.length !== 25}
+        >
+          {selected.length === 25
+            ? "🎮 이 25명으로 게임 진행하기"
+            : `25명을 선택해 주세요 (${selected.length}/25)`}
+        </button>
+
+        <div className="center" style={{ marginTop: 14 }}>
+          <button className="btn btn-secondary" onClick={startNewGame}>
+            새 게임 만들기
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // ── 시작 화면: 게임 이름 + 시작 버튼만 ──────────────────
   return (
     <main className="page">
       <h1 className="game-title">이름 빙고</h1>
-      <p className="subtitle">진행자용 · 게임을 만들고 QR로 참가자를 초대하세요</p>
+      <p className="subtitle">진행자용 · 게임 이름을 정하고 시작하세요</p>
 
       <section className="card">
-        <h2>1. 게임 이름</h2>
+        <h2>게임 이름</h2>
         <input
           className="text-input"
           placeholder="예) 2026 신입생 환영회 이름 빙고"
@@ -257,40 +348,16 @@ export default function HostPage() {
           onChange={(e) => setTitle(e.target.value)}
           maxLength={40}
         />
-      </section>
-
-      <section className="card">
-        <h2>2. 이름 25개 한 번에 붙여넣기</h2>
-        <textarea
-          className="bulk-textarea"
-          placeholder={"김철수\n이영희\n박민수\n… (줄바꿈 또는 쉼표로 구분해 25명)"}
-          value={bulk}
-          onChange={(e) => applyBulk(e.target.value)}
-        />
-        <p className="hint">
-          엑셀·메모장에서 복사한 명단을 그대로 붙여넣으면 아래 25칸이 자동으로 채워집니다.
-        </p>
-      </section>
-
-      <section className="card">
-        <h2>3. 이름 확인 및 수정 ({filledCount}/25)</h2>
-        <div className="grid-25">
-          {names.map((name, i) => (
-            <input
-              key={i}
-              className={`cell-input${name.trim() ? " filled" : ""}`}
-              value={name}
-              placeholder={String(i + 1)}
-              onChange={(e) => setNameAt(i, e.target.value)}
-            />
-          ))}
-        </div>
         {error && <p className="error-text">{error}</p>}
       </section>
 
       <button className="btn btn-primary" onClick={createGame} disabled={creating}>
         {creating ? "만드는 중…" : "🎮 게임 시작하기"}
       </button>
+
+      <p className="hint center" style={{ marginTop: 14 }}>
+        게임을 시작하면 QR 코드가 생성되고, 참가자들이 적은 이름이 실시간으로 들어옵니다.
+      </p>
     </main>
   );
 }

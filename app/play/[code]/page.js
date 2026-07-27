@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { getBingoState, normalizeName } from "../../../lib/bingo";
@@ -69,7 +69,6 @@ export default function PlayPage() {
   }, [joined, code]);
 
   const filledCount = board.filter((n) => n.trim()).length;
-  const usedKeys = useMemo(() => new Set(board.map(normalizeName).filter(Boolean)), [board]);
 
   const setCellAt = (idx, value) => {
     setBoard((prev) => {
@@ -77,28 +76,6 @@ export default function PlayPage() {
       next[idx] = value;
       return next;
     });
-  };
-
-  // 칩을 탭하면 첫 번째 빈 칸에 채운다
-  const fillFromChip = (name) => {
-    if (usedKeys.has(normalizeName(name))) return;
-    setBoard((prev) => {
-      const idx = prev.findIndex((n) => !n.trim());
-      if (idx === -1) return prev;
-      const next = [...prev];
-      next[idx] = name;
-      return next;
-    });
-  };
-
-  const fillRandom = () => {
-    if (!game) return;
-    const shuffled = [...(game.names ?? [])];
-    for (let i = shuffled.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    setBoard(shuffled.slice(0, 25));
   };
 
   const clearBoard = () => setBoard(Array(25).fill(""));
@@ -215,18 +192,11 @@ export default function PlayPage() {
           onChange={(e) => setNickname(e.target.value)}
           maxLength={20}
         />
+        <p className="hint">여기 적은 이름이 진행자 화면에 실시간으로 표시됩니다.</p>
       </section>
 
       <section className="card">
         <h2>2. 빙고판 채우기 ({filledCount}/25)</h2>
-        <div className="row" style={{ marginBottom: 12 }}>
-          <button className="btn btn-secondary" onClick={fillRandom}>
-            🎲 랜덤으로 채우기
-          </button>
-          <button className="btn btn-danger" onClick={clearBoard}>
-            모두 지우기
-          </button>
-        </div>
         <div className="grid-25">
           {board.map((name, i) => (
             <input
@@ -239,30 +209,14 @@ export default function PlayPage() {
           ))}
         </div>
         <p className="hint">
-          칸을 눌러 직접 입력하거나, 아래 이름을 탭하면 빈 칸에 순서대로 들어갑니다.
+          내 이름과 함께 참여한 다른 사람들의 이름을 직접 적어 25칸을 채워 주세요.
         </p>
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="btn btn-danger" onClick={clearBoard}>
+            모두 지우기
+          </button>
+        </div>
       </section>
-
-      {(game.names ?? []).length > 0 && (
-        <section className="card">
-          <h2>참가자 이름 목록 (탭해서 채우기)</h2>
-          <div className="chips">
-            {game.names.map((name) => {
-              const used = usedKeys.has(normalizeName(name));
-              return (
-                <button
-                  key={name}
-                  className={`chip${used ? " used" : ""}`}
-                  onClick={() => fillFromChip(name)}
-                  disabled={used}
-                >
-                  {name}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {error && <p className="error-text">{error}</p>}
 
