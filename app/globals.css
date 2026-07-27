@@ -1,0 +1,393 @@
+:root {
+  --pastel-green: #cdebd2;
+  --pastel-green-deep: #a8d8b9;
+  --pastel-green-dark: #2f6b46;
+  --beige: #f3ecd8;
+  --beige-dark: #e5d9b8;
+  --beige-border: #cbbd94;
+  --neon: #d8ff3e;
+  --neon-glow: rgba(216, 255, 62, 0.75);
+  --called-red: #e5352f;
+  --called-red-dark: #b0201b;
+  --ink: #2d3a2f;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic",
+    sans-serif;
+  background: linear-gradient(160deg, #dff3e0 0%, var(--pastel-green) 45%, var(--pastel-green-deep) 100%);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font-family: inherit;
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.game-title {
+  text-align: center;
+  font-size: clamp(1.9rem, 6vw, 3rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--neon);
+  -webkit-text-stroke: 1.5px var(--pastel-green-dark);
+  text-shadow:
+    0 0 10px var(--neon-glow),
+    0 0 24px var(--neon-glow),
+    0 2px 0 var(--pastel-green-dark);
+  margin-bottom: 6px;
+  word-break: keep-all;
+}
+
+.subtitle {
+  text-align: center;
+  color: var(--pastel-green-dark);
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1.5px solid rgba(47, 107, 70, 0.25);
+  border-radius: 18px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 6px 18px rgba(47, 107, 70, 0.12);
+}
+
+.card h2 {
+  font-size: 1.05rem;
+  color: var(--pastel-green-dark);
+  margin-bottom: 12px;
+}
+
+.field-label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--pastel-green-dark);
+  margin-bottom: 6px;
+}
+
+.text-input,
+.bulk-textarea {
+  width: 100%;
+  border: 1.5px solid var(--pastel-green-deep);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 1rem;
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.text-input:focus,
+.bulk-textarea:focus {
+  outline: 2px solid var(--pastel-green-dark);
+  outline-offset: 1px;
+}
+
+.bulk-textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.hint {
+  font-size: 0.82rem;
+  color: #5b7a63;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 20px;
+  font-size: 1.02rem;
+  font-weight: 800;
+  transition: transform 0.06s ease, box-shadow 0.12s ease;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: var(--pastel-green-dark);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(47, 107, 70, 0.35);
+  width: 100%;
+}
+
+.btn-secondary {
+  background: #ffffff;
+  color: var(--pastel-green-dark);
+  border: 1.5px solid var(--pastel-green-dark);
+}
+
+.btn-danger {
+  background: #ffffff;
+  color: var(--called-red);
+  border: 1.5px solid var(--called-red);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.row > .btn {
+  flex: 1;
+}
+
+/* ── 25칸 입력/보드 그리드 ─────────────────────────── */
+.grid-25 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.cell-input {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 1.5px solid var(--beige-border);
+  border-radius: 10px;
+  background: var(--beige);
+  text-align: center;
+  font-size: clamp(0.7rem, 2.6vw, 0.95rem);
+  font-weight: 700;
+  color: var(--ink);
+  padding: 2px;
+}
+
+.cell-input:focus {
+  outline: 2px solid var(--pastel-green-dark);
+}
+
+.cell-input.filled {
+  background: var(--beige-dark);
+}
+
+/* 참가자 빙고판 */
+.board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 18px;
+  border: 2px solid rgba(47, 107, 70, 0.3);
+}
+
+.board-cell {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 12px;
+  background: var(--beige);
+  border: 2px solid var(--beige-border);
+  font-weight: 800;
+  font-size: clamp(0.72rem, 3vw, 1.02rem);
+  color: var(--ink);
+  padding: 3px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+  transition: background 0.25s ease, color 0.25s ease, transform 0.25s ease;
+}
+
+.board-cell.called {
+  background: var(--called-red);
+  border-color: var(--called-red-dark);
+  color: #ffffff;
+  transform: scale(1.03);
+  box-shadow: 0 0 12px rgba(229, 53, 47, 0.55);
+}
+
+.board-cell.line {
+  outline: 3px solid var(--neon);
+  outline-offset: -1px;
+}
+
+/* 진행자 이름 버튼 목록 */
+.host-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 8px;
+}
+
+.name-btn {
+  position: relative;
+  border: 2px solid var(--beige-border);
+  border-radius: 12px;
+  background: var(--beige);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.98rem;
+  padding: 16px 6px;
+  word-break: keep-all;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.name-btn.called {
+  background: var(--called-red);
+  border-color: var(--called-red-dark);
+  color: #ffffff;
+}
+
+.name-btn .order-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  background: #ffffff;
+  color: var(--called-red);
+  border: 2px solid var(--called-red);
+  border-radius: 999px;
+  min-width: 24px;
+  height: 24px;
+  font-size: 0.75rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+/* 후보 이름 칩 */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  border: 1.5px solid var(--pastel-green-deep);
+  background: #ffffff;
+  color: var(--pastel-green-dark);
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.chip.used {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+
+/* QR / 링크 */
+.qr-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.qr-box img {
+  width: min(65vw, 260px);
+  height: auto;
+  border-radius: 14px;
+  border: 6px solid #ffffff;
+  box-shadow: 0 6px 18px rgba(47, 107, 70, 0.25);
+}
+
+.link-line {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+}
+
+.link-line input {
+  flex: 1;
+  min-width: 0;
+}
+
+.code-pill {
+  display: inline-block;
+  background: var(--pastel-green-dark);
+  color: var(--neon);
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  font-size: 1.3rem;
+  border-radius: 10px;
+  padding: 8px 16px 8px 20px;
+}
+
+/* 빙고 축하 배너 */
+.bingo-banner {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--called-red);
+  background: #fff;
+  border: 3px solid var(--called-red);
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 14px;
+  animation: pop 0.4s ease;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.7);
+  }
+  70% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.status-line {
+  text-align: center;
+  font-weight: 700;
+  color: var(--pastel-green-dark);
+  margin-bottom: 12px;
+}
+
+.error-text {
+  color: var(--called-red);
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-top: 8px;
+}
+
+.center {
+  text-align: center;
+}
