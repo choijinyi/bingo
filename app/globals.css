@@ -316,6 +316,123 @@ textarea {
   text-decoration: line-through;
 }
 
+/* 넓은 진행자 화면 */
+.page-wide {
+  max-width: 920px;
+}
+
+/* 선택 현황 바 */
+.select-bar {
+  position: sticky;
+  top: 10px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 2px solid var(--pastel-green-dark);
+  border-radius: 999px;
+  padding: 8px 10px 8px 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 6px 16px rgba(47, 107, 70, 0.22);
+  backdrop-filter: blur(4px);
+}
+
+.select-count {
+  font-weight: 800;
+  color: var(--pastel-green-dark);
+  font-size: 1.02rem;
+}
+
+.select-count strong {
+  font-size: 1.3rem;
+  color: var(--called-red);
+}
+
+.btn-small {
+  padding: 8px 14px;
+  font-size: 0.88rem;
+  border-radius: 999px;
+}
+
+.empty-note {
+  text-align: center;
+  color: #5b7a63;
+  font-weight: 700;
+  padding: 18px 0;
+  border: 2px dashed var(--pastel-green-deep);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* 빙고판 이름 풀 칩 (빈도 배지 + 삭제 버튼) */
+.pool-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  border: 2px solid var(--beige-border);
+  background: var(--beige);
+  border-radius: 999px;
+  overflow: hidden;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.pool-chip-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.95rem;
+  padding: 9px 4px 9px 14px;
+}
+
+.pool-chip .cnt {
+  font-size: 0.72rem;
+  font-weight: 900;
+  background: rgba(47, 107, 70, 0.14);
+  color: var(--pastel-green-dark);
+  border-radius: 999px;
+  padding: 2px 8px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.pool-chip-del {
+  border: none;
+  background: transparent;
+  color: #9b8a5e;
+  font-size: 1.05rem;
+  font-weight: 900;
+  padding: 0 11px 0 5px;
+  line-height: 1;
+}
+
+.pool-chip-del:hover {
+  color: var(--called-red);
+}
+
+.pool-chip.selected {
+  background: var(--pastel-green-dark);
+  border-color: var(--pastel-green-dark);
+}
+
+.pool-chip.selected .pool-chip-main {
+  color: var(--neon);
+}
+
+.pool-chip.selected .cnt {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.pool-chip.selected .pool-chip-del {
+  color: rgba(255, 255, 255, 0.75);
+}
+
 /* QR / 링크 */
 .qr-box {
   display: flex;

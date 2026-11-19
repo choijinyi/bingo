@@ -25,7 +25,7 @@ export default function HostPage() {
   const loadGame = useCallback(async (code) => {
     const { data } = await supabase
       .from("bingo_games")
-      .select("code,title,names,called")
+      .select("code,title,names,called,hidden")
       .eq("code", code)
       .maybeSingle();
     return data;
@@ -56,13 +56,13 @@ export default function HostPage() {
     QRCode.toDataURL(playUrl, { width: 520, margin: 2 }).then(setQrUrl);
   }, [playUrl]);
 
-  // 참가자 이름 실시간 수신 (3초 폴링)
+  // 참가자(이름 + 빙고판) 실시간 수신 (3초 폴링)
   useEffect(() => {
     if (!game) return undefined;
     const fetchPlayers = async () => {
       const { data } = await supabase
         .from("bingo_players")
-        .select("id,nickname,created_at")
+        .select("id,nickname,names,created_at")
         .eq("game_code", game.code)
         .order("created_at", { ascending: true })
         .limit(1000);
@@ -73,8 +73,8 @@ export default function HostPage() {
     return () => clearInterval(t);
   }, [game]);
 
-  // 같은 이름은 하나로 합쳐 선택 후보로 보여준다
-  const pool = useMemo(() => {
+  // ── 테이블 1: 참가자 본인 이름 (중복 제거) ──────────────
+  const participantPool = useMemo(() => {
     const seen = new Map();
     for (const p of players) {
       const key = normalizeName(p.nickname);
@@ -82,6 +82,35 @@ export default function HostPage() {
     }
     return [...seen.values()];
   }, [players]);
+
+  // ── 테이블 2: 빙고판에 적힌 모든 이름 (중복 제거 + 빈도) ──
+  const hiddenKeys = useMemo(
+    () => new Set((game?.hidden ?? []).map(normalizeName)),
+    [game]
+  );
+
+  const boardPool = useMemo(() => {
+    const map = new Map();
+    for (const p of players) {
+      const counted = new Set(); // 같은 사람 빙고판의 중복 이름은 1회만 센다
+      for (const raw of p.names ?? []) {
+        const key = normalizeName(raw);
+        if (!key || counted.has(key)) continue;
+        counted.add(key);
+        const entry = map.get(key);
+        if (entry) entry.count += 1;
+        else map.set(key, { key, display: String(raw).trim(), count: 1 });
+      }
+    }
+    return [...map.values()].sort(
+      (a, b) => b.count - a.count || a.display.localeCompare(b.display, "ko")
+    );
+  }, [players]);
+
+  const visibleBoardPool = useMemo(
+    () => boardPool.filter((e) => !hiddenKeys.has(e.key)),
+    [boardPool, hiddenKeys]
+  );
 
   const selectedKeys = useMemo(() => new Set(selected.map(normalizeName)), [selected]);
 
@@ -97,9 +126,35 @@ export default function HostPage() {
     });
   };
 
-  const autoSelect = () => {
+  const autoSelectParticipants = () => {
     setError("");
-    setSelected(pool.slice(0, 25));
+    setSelected(participantPool.slice(0, 25));
+  };
+
+  const autoSelectBoard = () => {
+    setError("");
+    setSelected(visibleBoardPool.slice(0, 25).map((e) => e.display));
+  };
+
+  // 빙고판 이름 테이블에서 이름 삭제 (DB에 저장되어 유지)
+  const hideBoardName = async (entry) => {
+    if (!game) return;
+    const nextHidden = [...(game.hidden ?? []), entry.display];
+    setGame({ ...game, hidden: nextHidden });
+    setSelected((prev) => prev.filter((n) => normalizeName(n) !== entry.key));
+    await supabase
+      .from("bingo_games")
+      .update({ hidden: nextHidden, updated_at: new Date().toISOString() })
+      .eq("code", game.code);
+  };
+
+  const restoreHidden = async () => {
+    if (!game) return;
+    setGame({ ...game, hidden: [] });
+    await supabase
+      .from("bingo_games")
+      .update({ hidden: [], updated_at: new Date().toISOString() })
+      .eq("code", game.code);
   };
 
   const createGame = async () => {
@@ -112,8 +167,8 @@ export default function HostPage() {
     const code = makeGameCode();
     const { data, error: err } = await supabase
       .from("bingo_games")
-      .insert({ code, title: title.trim(), names: [], called: [], mode: "name" })
-      .select("code,title,names,called")
+      .insert({ code, title: title.trim(), names: [], called: [], hidden: [], mode: "name" })
+      .select("code,title,names,called,hidden")
       .single();
     setCreating(false);
     if (err || !data) {
@@ -211,7 +266,7 @@ export default function HostPage() {
       (game.called ?? []).findIndex((c) => normalizeName(c) === normalizeName(name)) + 1;
 
     return (
-      <main className="page">
+      <main className="page page-wide">
         <h1 className="game-title">{game.title}</h1>
         <p className="subtitle">진행자 화면 · 참가자 {players.length}명 접속</p>
 
@@ -252,12 +307,13 @@ export default function HostPage() {
     );
   }
 
-  // ── 참가자 모집 + 25명 선택 화면 ────────────────────────
+  // ── 참가자 모집 + 25명 선택 화면 (테이블 2개) ───────────
   if (game) {
+    const hiddenCount = (game.hidden ?? []).length;
     return (
-      <main className="page">
+      <main className="page page-wide">
         <h1 className="game-title">{game.title}</h1>
-        <p className="subtitle">진행자 화면 · 참가자를 모으고 게임에 쓸 25명을 선택하세요</p>
+        <p className="subtitle">진행자 화면 · 이름을 탭해 게임에 쓸 25명을 선택하세요</p>
 
         <section className="card">
           <h2>📱 참가자 입장 QR</h2>
@@ -273,19 +329,29 @@ export default function HostPage() {
           </div>
         </section>
 
+        <div className="select-bar">
+          <span className="select-count">
+            선택 <strong>{selected.length}</strong>/25
+          </span>
+          <button
+            className="btn btn-danger btn-small"
+            onClick={() => setSelected([])}
+            disabled={selected.length === 0}
+          >
+            선택 초기화
+          </button>
+        </div>
+
         <section className="card">
-          <h2>
-            🙋 참가자 이름 ({pool.length}명 참가 · {selected.length}/25 선택) — 이름을 탭해서
-            선택하세요
-          </h2>
-          {pool.length === 0 ? (
-            <p className="hint">
-              아직 참가자가 없습니다. 참가자가 QR로 입장해 빙고판을 제출하면 이름이 여기에
-              실시간으로 나타납니다.
-            </p>
+          <h2>🙋 테이블 1 · 참가자 이름 ({participantPool.length}명 접속)</h2>
+          <p className="hint" style={{ marginTop: 0, marginBottom: 10 }}>
+            빙고판을 제출한 참가자의 이름이 실시간으로 들어옵니다. 탭하면 선택됩니다.
+          </p>
+          {participantPool.length === 0 ? (
+            <p className="empty-note">아직 참가자가 없습니다. QR을 보여 주세요!</p>
           ) : (
             <div className="host-grid">
-              {pool.map((name) => {
+              {participantPool.map((name) => {
                 const isSelected = selectedKeys.has(normalizeName(name));
                 return (
                   <button
@@ -300,16 +366,63 @@ export default function HostPage() {
             </div>
           )}
           <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn btn-secondary" onClick={autoSelect} disabled={pool.length === 0}>
-              먼저 온 25명 자동 선택
-            </button>
             <button
-              className="btn btn-danger"
-              onClick={() => setSelected([])}
-              disabled={selected.length === 0}
+              className="btn btn-secondary"
+              onClick={autoSelectParticipants}
+              disabled={participantPool.length === 0}
             >
-              선택 초기화
+              먼저 온 참가자 25명 자동 선택
             </button>
+          </div>
+        </section>
+
+        <section className="card">
+          <h2>📝 테이블 2 · 빙고판에 적힌 이름 ({visibleBoardPool.length}개)</h2>
+          <p className="hint" style={{ marginTop: 0, marginBottom: 10 }}>
+            참가자들이 25칸에 적은 이름을 중복 없이 모았습니다. 숫자는 그 이름이 적힌
+            빙고판 수, <strong>×</strong>를 누르면 목록에서 지워집니다. 탭하면 선택됩니다.
+          </p>
+          {visibleBoardPool.length === 0 ? (
+            <p className="empty-note">아직 빙고판에 적힌 이름이 없습니다.</p>
+          ) : (
+            <div className="chips">
+              {visibleBoardPool.map((entry) => {
+                const isSelected = selectedKeys.has(entry.key);
+                return (
+                  <span key={entry.key} className={`pool-chip${isSelected ? " selected" : ""}`}>
+                    <button
+                      className="pool-chip-main"
+                      onClick={() => toggleSelect(entry.display)}
+                    >
+                      {entry.display}
+                      <span className="cnt">{entry.count}</span>
+                    </button>
+                    <button
+                      className="pool-chip-del"
+                      onClick={() => hideBoardName(entry)}
+                      aria-label={`${entry.display} 삭제`}
+                      title="목록에서 지우기"
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <div className="row" style={{ marginTop: 12 }}>
+            <button
+              className="btn btn-secondary"
+              onClick={autoSelectBoard}
+              disabled={visibleBoardPool.length === 0}
+            >
+              많이 적힌 이름 25개 자동 선택
+            </button>
+            {hiddenCount > 0 && (
+              <button className="btn btn-secondary" onClick={restoreHidden}>
+                지운 이름 {hiddenCount}개 복원
+              </button>
+            )}
           </div>
           {error && <p className="error-text">{error}</p>}
         </section>
