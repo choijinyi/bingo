@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { supabase } from "../lib/supabase";
-import { makeGameCode, normalizeName } from "../lib/bingo";
+import { getBingoState, makeGameCode, normalizeName } from "../lib/bingo";
 
 const STORAGE_KEY = "name-bingo-host-code";
 
@@ -113,6 +113,40 @@ export default function HostPage() {
   );
 
   const selectedKeys = useMemo(() => new Set(selected.map(normalizeName)), [selected]);
+
+  // ── 참가자별 빙고 현황 (호출 단계) ──────────────────────
+  const bingoStatus = useMemo(() => {
+    if (!game || (game.names ?? []).length !== 25) return [];
+    const calledSet = new Set((game.called ?? []).map(normalizeName));
+    const hiddenSet = new Set((game.hidden ?? []).map(normalizeName));
+    return players
+      .map((p) => {
+        const raw = Array.isArray(p.names) ? p.names : [];
+        const board = Array.from({ length: 25 }, (_, i) => {
+          const n = raw[i] ?? "";
+          return hiddenSet.has(normalizeName(n)) ? "" : n;
+        });
+        const { hit, bingoCount } = getBingoState(board, calledSet);
+        return {
+          id: p.id,
+          nickname: p.nickname,
+          bingo: bingoCount,
+          hits: hit.filter(Boolean).length,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.bingo - a.bingo || b.hits - a.hits || a.nickname.localeCompare(b.nickname, "ko")
+      );
+  }, [players, game]);
+
+  const bingoSummary = useMemo(() => {
+    const byLines = new Map();
+    for (const s of bingoStatus) {
+      if (s.bingo > 0) byLines.set(s.bingo, (byLines.get(s.bingo) ?? 0) + 1);
+    }
+    return [...byLines.entries()].sort((a, b) => b[0] - a[0]);
+  }, [bingoStatus]);
 
   const toggleSelect = (name) => {
     setError("");
@@ -295,6 +329,36 @@ export default function HostPage() {
               );
             })}
           </div>
+        </section>
+
+        <section className="card">
+          <h2>🏆 참가자 빙고 현황 ({players.length}명)</h2>
+          {bingoSummary.length > 0 ? (
+            <p className="bingo-summary">
+              {bingoSummary.map(([lines, cnt]) => (
+                <span key={lines} className="summary-pill">
+                  {lines}줄 <strong>{cnt}명</strong>
+                </span>
+              ))}
+            </p>
+          ) : (
+            <p className="hint" style={{ marginTop: 0, marginBottom: 10 }}>
+              아직 빙고를 완성한 참가자가 없습니다. 이름을 호출하면 자동으로 집계됩니다.
+            </p>
+          )}
+          {bingoStatus.length === 0 ? (
+            <p className="empty-note">참가자가 없습니다.</p>
+          ) : (
+            <div className="status-grid">
+              {bingoStatus.map((s) => (
+                <div key={s.id} className={`player-row${s.bingo > 0 ? " has-bingo" : ""}`}>
+                  <span className="player-name">{s.nickname}</span>
+                  <span className="player-hits">{s.hits}칸</span>
+                  <span className={`bingo-badge${s.bingo > 0 ? " on" : ""}`}>{s.bingo}줄</span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <div className="row">

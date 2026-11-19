@@ -543,3 +543,82 @@ textarea {
 .center {
   text-align: center;
 }
+
+/* ── 참가자 빙고 현황 ─────────────────────────────── */
+.bingo-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.summary-pill {
+  background: var(--pastel-green-dark);
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.summary-pill strong {
+  color: var(--neon);
+  font-size: 1.05rem;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--beige);
+  border: 2px solid var(--beige-border);
+  border-radius: 12px;
+  padding: 9px 12px;
+}
+
+.player-row.has-bingo {
+  background: #fff1f0;
+  border-color: var(--called-red);
+}
+
+.player-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 800;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-hits {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #7a7a6c;
+  flex-shrink: 0;
+}
+
+.bingo-badge {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  font-weight: 900;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.07);
+  color: #8a8a7c;
+}
+
+.bingo-badge.on {
+  background: var(--called-red);
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(229, 53, 47, 0.45);
+}
