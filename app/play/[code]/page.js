@@ -31,7 +31,7 @@ export default function PlayPage() {
     (async () => {
       const { data } = await supabase
         .from("bingo_games")
-        .select("code,title,names,called")
+        .select("code,title,names,called,hidden")
         .eq("code", code)
         .maybeSingle();
       if (!data) {
@@ -58,7 +58,7 @@ export default function PlayPage() {
     const poll = async () => {
       const { data } = await supabase
         .from("bingo_games")
-        .select("title,called")
+        .select("title,called,hidden")
         .eq("code", code)
         .maybeSingle();
       if (data) setGame((prev) => (prev ? { ...prev, ...data } : prev));
@@ -139,7 +139,12 @@ export default function PlayPage() {
   // ── 게임 화면 (참가 완료) ──────────────────────────
   if (joined) {
     const calledSet = new Set((game.called ?? []).map(normalizeName));
-    const { hit, bingoCount, lineCells } = getBingoState(joined.board, calledSet);
+    // 진행자가 지운 이름은 참가자 빙고판에서도 지워진 칸으로 표시하고 판정에서 제외한다
+    const hiddenSet = new Set((game.hidden ?? []).map(normalizeName));
+    const effectiveBoard = joined.board.map((name) =>
+      hiddenSet.has(normalizeName(name)) ? "" : name
+    );
+    const { hit, bingoCount, lineCells } = getBingoState(effectiveBoard, calledSet);
 
     return (
       <main className="page">
@@ -155,18 +160,24 @@ export default function PlayPage() {
         )}
 
         <div className="board">
-          {joined.board.map((name, i) => (
-            <div
-              key={i}
-              className={`board-cell${hit[i] ? " called" : ""}${lineCells.has(i) ? " line" : ""}`}
-            >
-              {name}
-            </div>
-          ))}
+          {joined.board.map((name, i) => {
+            const isRemoved = hiddenSet.has(normalizeName(name));
+            return (
+              <div
+                key={i}
+                className={`board-cell${isRemoved ? " removed" : ""}${
+                  !isRemoved && hit[i] ? " called" : ""
+                }${lineCells.has(i) ? " line" : ""}`}
+              >
+                {name}
+              </div>
+            );
+          })}
         </div>
 
         <p className="hint center" style={{ marginTop: 14 }}>
-          진행자가 이름을 부르면 자동으로 빨간색으로 표시됩니다.
+          진행자가 이름을 부르면 자동으로 빨간색으로 표시됩니다. 회색 취소선 칸은
+          진행자가 지운 이름입니다.
         </p>
         <div className="center" style={{ marginTop: 18 }}>
           <button className="btn btn-secondary" onClick={leave}>

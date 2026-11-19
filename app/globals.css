@@ -231,6 +231,14 @@ textarea {
   transition: background 0.25s ease, color 0.25s ease, transform 0.25s ease;
 }
 
+.board-cell.removed {
+  background: #e3e3da;
+  border-color: #c6c6ba;
+  color: #9a9a8e;
+  text-decoration: line-through;
+  opacity: 0.8;
+}
+
 .board-cell.called {
   background: var(--called-red);
   border-color: var(--called-red-dark);
