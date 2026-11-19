@@ -139,13 +139,18 @@ export default function HostPage() {
   // 빙고판 이름 테이블에서 이름 삭제 (DB에 저장되어 유지)
   const hideBoardName = async (entry) => {
     if (!game) return;
-    const nextHidden = [...(game.hidden ?? []), entry.display];
+    const prevHidden = game.hidden ?? [];
+    const nextHidden = [...prevHidden, entry.display];
     setGame({ ...game, hidden: nextHidden });
     setSelected((prev) => prev.filter((n) => normalizeName(n) !== entry.key));
-    await supabase
+    const { error: err } = await supabase
       .from("bingo_games")
       .update({ hidden: nextHidden, updated_at: new Date().toISOString() })
       .eq("code", game.code);
+    if (err) {
+      setGame({ ...game, hidden: prevHidden });
+      window.alert("이름을 지우지 못했습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.");
+    }
   };
 
   const restoreHidden = async () => {
