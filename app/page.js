@@ -25,7 +25,7 @@ export default function HostPage() {
   const loadGame = useCallback(async (code) => {
     const { data } = await supabase
       .from("bingo_games")
-      .select("code,title,names,called,hidden")
+      .select("code,title,names,called,hidden,winners")
       .eq("code", code)
       .maybeSingle();
     return data;
@@ -116,7 +116,7 @@ export default function HostPage() {
 
   // ── 참가자별 빙고 현황 (호출 단계) ──────────────────────
   const bingoStatus = useMemo(() => {
-    if (!game || (game.names ?? []).length !== 25) return [];
+    if (!game || (game.names ?? []).length === 0) return [];
     const calledSet = new Set((game.called ?? []).map(normalizeName));
     const hiddenSet = new Set((game.hidden ?? []).map(normalizeName));
     return players
@@ -206,8 +206,16 @@ export default function HostPage() {
     const code = makeGameCode();
     const { data, error: err } = await supabase
       .from("bingo_games")
-      .insert({ code, title: title.trim(), names: [], called: [], hidden: [], mode: "name" })
-      .select("code,title,names,called,hidden")
+      .insert({
+        code,
+        title: title.trim(),
+        names: [],
+        called: [],
+        hidden: [],
+        winners: [],
+        mode: "name",
+      })
+      .select("code,title,names,called,hidden,winners")
       .single();
     setCreating(false);
     if (err || !data) {
@@ -219,7 +227,15 @@ export default function HostPage() {
   };
 
   const confirmNames = async () => {
-    if (!game || selected.length !== 25) return;
+    if (!game || selected.length === 0) return;
+    if (
+      selected.length < 25 &&
+      !window.confirm(
+        `선택한 이름이 ${selected.length}개입니다. 25개가 안 되어도 게임을 시작할 수 있습니다. 시작할까요?`
+      )
+    ) {
+      return;
+    }
     const { error: err } = await supabase
       .from("bingo_games")
       .update({ names: selected, updated_at: new Date().toISOString() })
@@ -233,13 +249,41 @@ export default function HostPage() {
 
   const backToSelect = async () => {
     if (!game) return;
-    if (!window.confirm("이름을 다시 선택할까요? 호출 기록도 초기화됩니다.")) return;
+    if (!window.confirm("이름을 다시 선택할까요? 호출·당첨 기록도 초기화됩니다.")) return;
     await supabase
       .from("bingo_games")
-      .update({ names: [], called: [], updated_at: new Date().toISOString() })
+      .update({ names: [], called: [], winners: [], updated_at: new Date().toISOString() })
       .eq("code", game.code);
     setSelected(game.names ?? []);
-    setGame({ ...game, names: [], called: [] });
+    setGame({ ...game, names: [], called: [], winners: [] });
+  };
+
+  // 빙고 현황에서 참가자를 탭해 당첨 처리/해제
+  const toggleWinner = async (status) => {
+    if (!game) return;
+    const winners = game.winners ?? [];
+    const isWinner = winners.some((w) => w.id === status.id);
+    if (
+      !window.confirm(
+        isWinner
+          ? `${status.nickname}님의 당첨을 취소할까요?`
+          : `${status.nickname}님(${status.bingo}줄)을 당첨 처리할까요?`
+      )
+    ) {
+      return;
+    }
+    const next = isWinner
+      ? winners.filter((w) => w.id !== status.id)
+      : [...winners, { id: status.id, nickname: status.nickname }];
+    setGame({ ...game, winners: next });
+    const { error: err } = await supabase
+      .from("bingo_games")
+      .update({ winners: next, updated_at: new Date().toISOString() })
+      .eq("code", game.code);
+    if (err) {
+      setGame({ ...game, winners });
+      window.alert("당첨 처리를 저장하지 못했습니다. 다시 시도해 주세요.");
+    }
   };
 
   const toggleCalled = async (name) => {
@@ -298,9 +342,10 @@ export default function HostPage() {
     );
   }
 
-  // ── 게임 진행 화면 (25명 확정 후: 이름 호출) ────────────
-  if (game && (game.names ?? []).length === 25) {
+  // ── 게임 진행 화면 (이름 확정 후: 이름 호출) ────────────
+  if (game && (game.names ?? []).length > 0) {
     const calledKeys = new Set((game.called ?? []).map(normalizeName));
+    const winnerIds = new Set((game.winners ?? []).map((w) => w.id));
     const orderOf = (name) =>
       (game.called ?? []).findIndex((c) => normalizeName(c) === normalizeName(name)) + 1;
 
@@ -311,8 +356,9 @@ export default function HostPage() {
 
         <section className="card">
           <h2>
-            📣 이름을 클릭해서 호출하세요 ({(game.called ?? []).length}/25) — 다시 클릭하면
-            취소됩니다
+            📣 이름을 클릭해서 호출하세요 ({(game.called ?? []).length}/
+            {(game.names ?? []).length}) — 호출된 이름은 참가자 빙고판에 빨간색으로
+            표시되고, 다시 클릭하면 취소됩니다
           </h2>
           <div className="host-grid">
             {(game.names ?? []).map((name) => {
@@ -332,7 +378,14 @@ export default function HostPage() {
         </section>
 
         <section className="card">
-          <h2>🏆 참가자 빙고 현황 ({players.length}명)</h2>
+          <h2>🏆 참가자 빙고 현황 ({players.length}명) — 참가자를 탭하면 당첨 처리됩니다</h2>
+          {(game.winners ?? []).length > 0 && (
+            <p className="winner-line">
+              🎉 당첨:{" "}
+              {(game.winners ?? []).map((w) => w.nickname).join(", ")} (
+              {(game.winners ?? []).length}명)
+            </p>
+          )}
           {bingoSummary.length > 0 ? (
             <p className="bingo-summary">
               {bingoSummary.map(([lines, cnt]) => (
@@ -350,13 +403,27 @@ export default function HostPage() {
             <p className="empty-note">참가자가 없습니다.</p>
           ) : (
             <div className="status-grid">
-              {bingoStatus.map((s) => (
-                <div key={s.id} className={`player-row${s.bingo > 0 ? " has-bingo" : ""}`}>
-                  <span className="player-name">{s.nickname}</span>
-                  <span className="player-hits">{s.hits}칸</span>
-                  <span className={`bingo-badge${s.bingo > 0 ? " on" : ""}`}>{s.bingo}줄</span>
-                </div>
-              ))}
+              {bingoStatus.map((s) => {
+                const isWinner = winnerIds.has(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    className={`player-row${isWinner ? " winner" : s.bingo > 0 ? " has-bingo" : ""}`}
+                    onClick={() => toggleWinner(s)}
+                  >
+                    <span className="player-name">
+                      {isWinner && "👑 "}
+                      {s.nickname}
+                    </span>
+                    <span className="player-hits">{s.hits}칸</span>
+                    <span
+                      className={`bingo-badge${isWinner ? " gold" : s.bingo > 0 ? " on" : ""}`}
+                    >
+                      {isWinner ? "당첨" : `${s.bingo}줄`}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </section>
@@ -499,12 +566,16 @@ export default function HostPage() {
         <button
           className="btn btn-primary"
           onClick={confirmNames}
-          disabled={selected.length !== 25}
+          disabled={selected.length === 0}
         >
-          {selected.length === 25
-            ? "🎮 이 25명으로 게임 진행하기"
-            : `25명을 선택해 주세요 (${selected.length}/25)`}
+          {selected.length === 0
+            ? "게임에 쓸 이름을 탭해서 선택해 주세요"
+            : `🎮 선택한 ${selected.length}명으로 게임 진행하기`}
         </button>
+        <p className="hint center" style={{ marginTop: 10 }}>
+          이 버튼을 눌러 호출 화면으로 넘어가야 이름 호출이 시작됩니다. 호출된 이름은
+          참가자 빙고판에 빨간색으로 표시됩니다.
+        </p>
 
         <div className="center" style={{ marginTop: 14 }}>
           <button className="btn btn-secondary" onClick={startNewGame}>

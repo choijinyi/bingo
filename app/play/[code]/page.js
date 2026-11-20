@@ -31,7 +31,7 @@ export default function PlayPage() {
     (async () => {
       const { data } = await supabase
         .from("bingo_games")
-        .select("code,title,names,called,hidden")
+        .select("code,title,names,called,hidden,winners")
         .eq("code", code)
         .maybeSingle();
       if (!data) {
@@ -58,7 +58,7 @@ export default function PlayPage() {
     const poll = async () => {
       const { data } = await supabase
         .from("bingo_games")
-        .select("title,called,hidden")
+        .select("title,called,hidden,winners")
         .eq("code", code)
         .maybeSingle();
       if (data) setGame((prev) => (prev ? { ...prev, ...data } : prev));
@@ -145,6 +145,7 @@ export default function PlayPage() {
       hiddenSet.has(normalizeName(name)) ? "" : name
     );
     const { hit, bingoCount, lineCells } = getBingoState(effectiveBoard, calledSet);
+    const isWinner = (game.winners ?? []).some((w) => w.id === joined.id);
 
     return (
       <main className="page">
@@ -153,7 +154,13 @@ export default function PlayPage() {
           {joined.nickname}님의 빙고판 · 호출 {(game.called ?? []).length}개
         </p>
 
-        {bingoCount > 0 && (
+        {isWinner && (
+          <div className="winner-banner">
+            👑 축하합니다! 당첨되었습니다! 👑
+          </div>
+        )}
+
+        {!isWinner && bingoCount > 0 && (
           <div className="bingo-banner" key={bingoCount}>
             🎉 {bingoCount}줄 빙고! 🎉
           </div>

@@ -583,11 +583,20 @@ textarea {
   border: 2px solid var(--beige-border);
   border-radius: 12px;
   padding: 9px 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .player-row.has-bingo {
   background: #fff1f0;
   border-color: var(--called-red);
+}
+
+.player-row.winner {
+  background: #fff7dc;
+  border-color: #d8a400;
+  box-shadow: 0 0 10px rgba(216, 164, 0, 0.4);
 }
 
 .player-name {
@@ -621,4 +630,35 @@ textarea {
   background: var(--called-red);
   color: #ffffff;
   box-shadow: 0 0 8px rgba(229, 53, 47, 0.45);
+}
+
+.bingo-badge.gold {
+  background: #d8a400;
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(216, 164, 0, 0.5);
+}
+
+.winner-line {
+  background: #fff7dc;
+  border: 2px solid #d8a400;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
+  color: #8a6a00;
+  margin-bottom: 12px;
+}
+
+/* 참가자 당첨 배너 */
+.winner-banner {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #8a6a00;
+  background: linear-gradient(135deg, #fff7dc, #ffe9a8);
+  border: 3px solid #d8a400;
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 0 18px rgba(216, 164, 0, 0.5);
+  animation: pop 0.4s ease;
 }
